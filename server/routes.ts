@@ -5,9 +5,12 @@ import { storage } from "./storage";
 import { insertCategorySchema, insertArticleSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { setupAuth, requireAuth } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.use(express.json());
+  
+  setupAuth(app);
 
   app.get("/api/categories", async (req, res) => {
     try {
@@ -45,7 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/categories", async (req, res) => {
+  app.post("/api/categories", requireAuth, async (req, res) => {
     try {
       const validated = insertCategorySchema.parse(req.body);
       const category = await storage.createCategory(validated);
@@ -100,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/articles", async (req, res) => {
+  app.post("/api/articles", requireAuth, async (req, res) => {
     try {
       const validated = insertArticleSchema.parse(req.body);
       const article = await storage.createArticle(validated);
@@ -114,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/articles/:id", async (req, res) => {
+  app.put("/api/articles/:id", requireAuth, async (req, res) => {
     try {
       const validated = insertArticleSchema.partial().parse(req.body);
       const article = await storage.updateArticle(req.params.id, validated);
@@ -133,7 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/articles/:id", async (req, res) => {
+  app.delete("/api/articles/:id", requireAuth, async (req, res) => {
     try {
       const success = await storage.deleteArticle(req.params.id);
       
