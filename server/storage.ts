@@ -1,5 +1,13 @@
-import { type Category, type InsertCategory, type Article, type InsertArticle } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { 
+  categories, 
+  articles,
+  type Category, 
+  type InsertCategory, 
+  type Article, 
+  type InsertArticle 
+} from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getCategory(id: string): Promise<Category | undefined>;
@@ -16,93 +24,68 @@ export interface IStorage {
   deleteArticle(id: string): Promise<boolean>;
 }
 
-export class MemStorage implements IStorage {
-  private categories: Map<string, Category>;
-  private articles: Map<string, Article>;
-
-  constructor() {
-    this.categories = new Map();
-    this.articles = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getCategory(id: string): Promise<Category | undefined> {
-    return this.categories.get(id);
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category || undefined;
   }
 
   async getCategoryBySlug(slug: string): Promise<Category | undefined> {
-    return Array.from(this.categories.values()).find(
-      (category) => category.slug === slug,
-    );
+    const [category] = await db.select().from(categories).where(eq(categories.slug, slug));
+    return category || undefined;
   }
 
   async getAllCategories(): Promise<Category[]> {
-    return Array.from(this.categories.values());
+    return await db.select().from(categories);
   }
 
   async createCategory(insertCategory: InsertCategory): Promise<Category> {
-    const id = randomUUID();
-    const category: Category = { 
-      ...insertCategory, 
-      id,
-      description: insertCategory.description ?? null,
-      icon: insertCategory.icon ?? null,
-    };
-    this.categories.set(id, category);
+    const [category] = await db
+      .insert(categories)
+      .values(insertCategory)
+      .returning();
     return category;
   }
 
   async getArticle(id: string): Promise<Article | undefined> {
-    return this.articles.get(id);
+    const [article] = await db.select().from(articles).where(eq(articles.id, id));
+    return article || undefined;
   }
 
   async getArticleBySlug(slug: string): Promise<Article | undefined> {
-    return Array.from(this.articles.values()).find(
-      (article) => article.slug === slug,
-    );
+    const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
+    return article || undefined;
   }
 
   async getAllArticles(): Promise<Article[]> {
-    return Array.from(this.articles.values());
+    return await db.select().from(articles).orderBy(desc(articles.published));
   }
 
   async getArticlesByCategory(categoryId: string): Promise<Article[]> {
-    return Array.from(this.articles.values()).filter(
-      (article) => article.categoryId === categoryId,
-    );
+    return await db.select().from(articles).where(eq(articles.categoryId, categoryId)).orderBy(desc(articles.published));
   }
 
   async createArticle(insertArticle: InsertArticle): Promise<Article> {
-    const id = randomUUID();
-    const article: Article = {
-      ...insertArticle,
-      id,
-      excerpt: insertArticle.excerpt ?? null,
-      thumbnail: insertArticle.thumbnail ?? null,
-      categoryId: insertArticle.categoryId ?? null,
-      readTime: insertArticle.readTime ?? null,
-      published: new Date(),
-      updatedAt: new Date(),
-    };
-    this.articles.set(id, article);
+    const [article] = await db
+      .insert(articles)
+      .values(insertArticle)
+      .returning();
     return article;
   }
 
   async updateArticle(id: string, updates: Partial<InsertArticle>): Promise<Article | undefined> {
-    const article = this.articles.get(id);
-    if (!article) return undefined;
-    
-    const updated: Article = {
-      ...article,
-      ...updates,
-      updatedAt: new Date(),
-    };
-    this.articles.set(id, updated);
-    return updated;
+    const [article] = await db
+      .update(articles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(articles.id, id))
+      .returning();
+    return article || undefined;
   }
 
   async deleteArticle(id: string): Promise<boolean> {
-    return this.articles.delete(id);
+    const result = await db.delete(articles).where(eq(articles.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
