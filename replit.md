@@ -17,9 +17,11 @@ BlogCMS is a complete, production-ready blog platform with content management sy
 
 ### Backend (Node.js + Express + PostgreSQL)
 - **RESTful API** - Complete CRUD operations for articles and categories
+- **Authentication** - Secure user authentication with bcrypt password hashing and session management
 - **PostgreSQL Database** - Persistent data storage with Drizzle ORM
 - **Type-Safe** - Full TypeScript support with Zod validation
 - **Database Migrations** - Automated schema management with Drizzle Kit
+- **Protected Routes** - All write operations (POST/PUT/DELETE) require authentication
 
 ### Content Management
 - **Categories** - Organize articles by topic
@@ -39,6 +41,12 @@ BlogCMS is a complete, production-ready blog platform with content management sy
 ## Architecture
 
 ### Database Schema
+
+**Users Table:**
+- id (varchar, UUID primary key)
+- username (text, unique) - Minimum 3 characters
+- password (text) - Bcrypt hashed with 12 rounds
+- createdAt (timestamp, default now)
 
 **Categories Table:**
 - id (varchar, UUID primary key)
@@ -61,25 +69,31 @@ BlogCMS is a complete, production-ready blog platform with content management sy
 
 ### API Endpoints
 
+**Authentication:**
+- POST /api/register - Create new user account
+- POST /api/login - Login with username/password
+- POST /api/logout - Logout and destroy session
+- GET /api/user - Get current logged-in user (returns 401 if not authenticated)
+
 **Categories:**
-- GET /api/categories - List all categories with article counts
-- GET /api/categories/:id - Get single category with articles
-- POST /api/categories - Create new category
+- GET /api/categories - List all categories with article counts (public)
+- GET /api/categories/:id - Get single category with articles (public)
+- POST /api/categories - Create new category (requires auth)
 
 **Articles:**
-- GET /api/articles - List all articles (supports ?search and ?category)
-- GET /api/articles/:slug - Get article by URL slug
-- POST /api/articles - Create new article
-- PUT /api/articles/:id - Update article
-- DELETE /api/articles/:id - Delete article
+- GET /api/articles - List all articles (public, supports ?search and ?category)
+- GET /api/articles/:slug - Get article by URL slug (public)
+- POST /api/articles - Create new article (requires auth)
+- PUT /api/articles/:id - Update article (requires auth)
+- DELETE /api/articles/:id - Delete article (requires auth)
 
 ### Frontend Routes
 
-- `/` - Homepage with categories and articles
-- `/article/:slug` - Article detail page
-- `/cms` - CMS dashboard (article list)
-- `/cms/articles/:id/edit` - Article editor (create/edit)
-- `/cms/articles/new/edit` - Create new article
+- `/` - Homepage with categories and articles (public)
+- `/article/:slug` - Article detail page (public)
+- `/auth` - Login and signup page
+- `/cms` - CMS dashboard (protected, requires login)
+- `/cms/articles/:id/edit` - Article editor (protected, requires login)
 
 ## Project Structure
 
@@ -100,14 +114,19 @@ BlogCMS is a complete, production-ready blog platform with content management sy
 │   │   ├── pages/              # Page components
 │   │   │   ├── HomeConnected.tsx           # Homepage
 │   │   │   ├── ArticleDetailConnected.tsx  # Article view
+│   │   │   ├── AuthPage.tsx                # Login/signup page
 │   │   │   ├── CMSDashboardConnected.tsx   # CMS dashboard
 │   │   │   └── ArticleEditor.tsx           # Create/edit articles
+│   │   ├── hooks/              # React hooks
+│   │   │   └── use-auth.tsx    # Authentication context and hooks
 │   │   ├── lib/                # Utilities
-│   │   │   └── queryClient.ts   # TanStack Query config
+│   │   │   ├── queryClient.ts   # TanStack Query config
+│   │   │   └── protected-route.tsx  # Route protection component
 │   │   └── App.tsx             # Main app with routing
 │   └── index.html              # HTML entry point
 ├── server/                      # Backend Express application
 │   ├── db.ts                   # Database connection
+│   ├── auth.ts                 # Authentication setup (passport, bcrypt, sessions)
 │   ├── storage.ts              # Data access layer (DatabaseStorage)
 │   ├── routes.ts               # API route handlers
 │   ├── seed.ts                 # Database seeding script
@@ -247,6 +266,52 @@ Potential features to add:
 - Social media sharing
 - Tag system
 
+## Authentication System
+
+### How It Works
+
+The app uses session-based authentication with the following components:
+
+**Server Side:**
+- **Passport.js** with LocalStrategy for username/password authentication
+- **bcrypt** for secure password hashing (12 rounds)
+- **express-session** with PostgreSQL session store for persistent sessions
+- **Secure cookies** with httpOnly, sameSite, and secure flags in production
+
+**Client Side:**
+- **AuthProvider** using React Context and TanStack Query
+- **ProtectedRoute** component to guard CMS routes
+- **useAuth** hook for accessing user state and auth mutations
+
+### Security Features
+
+- Passwords hashed with bcrypt (12 rounds)
+- Session data stored in PostgreSQL
+- CSRF protection via sameSite cookies
+- httpOnly cookies prevent XSS attacks
+- Secure cookies in production (HTTPS)
+- 7-day session expiration
+- Trust proxy configuration for Render deployment
+
+### User Flow
+
+1. **First Visit**: User clicks "CMS Dashboard" → Redirected to /auth
+2. **Registration**: User creates account → Auto-logged in → Redirected to CMS
+3. **Login**: User logs in → Session created → Access to CMS
+4. **Logout**: User clicks logout → Session destroyed → Redirected to homepage
+5. **Protected Access**: Unauthenticated users trying to access /cms → Redirected to /auth
+
+### Environment Variables
+
+**Required for Production:**
+- `SESSION_SECRET` - Strong random string for session encryption (CRITICAL)
+- `DATABASE_URL` - PostgreSQL connection string
+- `NODE_ENV` - Set to "production"
+
+**Local Development:**
+- Uses fallback session secret (automatically handled)
+- DATABASE_URL from local Replit database
+
 ## Last Updated
 
-November 11, 2025 - Initial version with full CMS functionality
+November 11, 2025 - Added authentication system with bcrypt and session management
